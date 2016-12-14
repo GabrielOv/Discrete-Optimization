@@ -5,7 +5,7 @@ import time
 import math
 from numpy import dot
 from collections import namedtuple
-Item = namedtuple("Item", ['index', 'value', 'weight'])
+Item = namedtuple("Item", ['index', 'value', 'weight', 'density'])
 
 def int2bin(i,padTo):
     padTo = int(math.sqrt(padTo))
@@ -19,7 +19,6 @@ def int2bin(i,padTo):
 
     r = [0]*(padTo-len(s))
     return r+s
-
 def brute_force(items,capacity):
     #for item in items:
     valueList =[]
@@ -47,7 +46,6 @@ def brute_force(items,capacity):
     print(capacity-weightCombos[max_index])
     print(max(valueCombos))
     return [valueCombos[max_index],weightCombos[max_index],int2bin(max_index,allCombos),1]
-
 def simpleGreddy(items,capacity):
 
     value = 0
@@ -60,8 +58,60 @@ def simpleGreddy(items,capacity):
             value += item.value
             weight += item.weight
     return [value,weight,taken,0]
+def orderlyGreddy(items,capacity):
 
+    value = 0
+    weight = 0
+    taken = [0]*len(items)
 
+    def getKey(item):
+        # print(item.index,"  ",item.density*(1+0.001*(item.weight/capacity)))
+        return item.density*(1+0.0001*(1-item.weight/capacity))
+    items = sorted(items, key = getKey, reverse=True)
+    # for item in items:
+    #     print(item.index,"  ",item.weight,"  ",item.density)
+
+    for item in items:
+        if weight + item.weight <= capacity:
+            taken[item.index] = 1
+            value += item.value
+            weight += item.weight
+    return [value,weight,taken,0]
+def depthFirst_trimer(items,capacity):
+    Node = namedtuple("Node", ['tier', 'value', 'room', 'estimate','taken'])
+
+    value = 0
+    weight = 0
+    taken = [0]*len(items)
+    # def getKey(item):
+    #     return item.density
+    # items = sorted(items, key = getKey, reverse=True)
+    indexList=[]
+    valueList =[]
+    weightList=[]
+    densityList=[]
+    for item in items:
+        indexList.append(item.index)
+        weightList.append(item.weight)
+        valueList.append(item.value)
+        densityList.append(item.density)
+
+    averageRemainingDensity =[]
+    for i in range(len(items)):
+        averageRemainingDensity.append(sum(item.density*item.weight for item in items[i:])/sum(item.weight for item in items[i:]))
+
+    def evaluate_options(valueList,weightList,averageRemainingDensity,combo,tier,capacity):
+        room = capacity - dot(combo,weightList)
+        if room < 0:
+            return [0, 0, 0, False]
+
+        value = dot(combo,valueList)
+        estimate = value + averageRemainingDensity[tier]*room
+        return [value, room, estimate, True]
+    # [value, room, estimate, True] = evaluate_options(valueList,weightList,averageRemainingDensity,node.taken)
+    # for tier in range(len())
+
+    return [value,weight,taken,0]
 def solve_it(input_data):
     # Modify this code to run your optimization algorithm
 
@@ -78,18 +128,31 @@ def solve_it(input_data):
     for i in range(1, item_count+1):
         line = lines[i]
         parts = line.split()
-        items.append(Item(i-1, int(parts[0]), int(parts[1])))
+        items.append(Item(i-1, int(parts[0]), int(parts[1]), float(parts[0])/float(parts[1])))
 
     # a trivial greedy algorithm for filling the knapsack
     # it takes items in-order until the knapsack is full
-    value = 0
-    weight = 0
-    taken = []
+    # value1 = 0
+    # weight1 = 0
+    # taken1 = []
+    #
+    # value2 = 0
+    # weight2 = 0
+    # taken2= []
 
-    #[value,weight,taken,optimal] = simpleGreddy(items,capacity)
-    [value,weight,taken,optimal] = brute_force(items,capacity)
+    [value1,weight1,taken1,optimal1] = simpleGreddy(items,capacity)
+    [value2,weight2,taken2,optimal2] = orderlyGreddy(items,capacity)
+
+    if value1 > value2:
+        [value,weight,taken,optimal]=[value1,weight1,taken1,optimal1]
+    else:
+        [value,weight,taken,optimal]=[value2,weight2,taken2,optimal2]
+
+    #[value,weight,taken,optimal] = brute_force(items,capacity)
+    #[value,weight,taken,optimal] = average_density_trimer(items,capacity)
 
     # prepare the solution in the specified output format
+    print(weight, "/", capacity)
     output_data = str(value) + ' ' + str(optimal) + '\n'
     output_data += ' '.join(map(str, taken))
     # print("--- %s seconds ---" % (time.time() - start_time))
