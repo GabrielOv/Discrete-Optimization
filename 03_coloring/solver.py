@@ -25,24 +25,28 @@ def solve_it(input_data):
 
     edges_per_node = []
     for i in range(node_count):
-        edges_per_node.append(sum(A[i][:]))
-
-    color_vector = np.ones((node_count))*2
+        edges_per_node.append(sum(abs(A[i][:])))
+    print(edges_per_node)
+    color_vector = np.ones((node_count))
     color_check  = np.dot(color_vector,A)
 
-    print(A)
-    #while any(node == 0 for node in color_check):
-    for i in range(3):
-        print(color_check)
+    # print(A)
+    # while any(node == 0 for node in color_check):
+    for i in range(2,40):
+        # print(color_vector)
+        # print(color_check)
+
         max_index = edges_per_node.index(max(edges_per_node))
-        color_vector[max_index]+=1
+        edges_per_node[max_index]-=1
+        color_vector[max_index]=i
         color_check  = np.dot(color_vector,A)
+        print(color_check.tolist().count(0))
 
     # print(edges_per_node)
     # build a trivial solution
     # every node has its own color
-    solution = range(0, node_count)
-
+    solution = map(int, color_vector.tolist())#range(0, node_count)
+    solution = list(item-1 for item in solution)
     # prepare the solution in the specified output format
     output_data = str(node_count) + ' ' + str(0) + '\n'
     output_data += ' '.join(map(str, solution))
