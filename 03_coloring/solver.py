@@ -32,13 +32,13 @@ def solve_it(input_data):
 
     # print(A)
     # while any(node == 0 for node in color_check):
-    for i in range(2,40):
+    for i in range(2,400):
         # print(color_vector)
         # print(color_check)
 
         max_index = edges_per_node.index(max(edges_per_node))
         edges_per_node[max_index]-=1
-        color_vector[max_index]=i
+        color_vector[max_index]+=1
         color_check  = np.dot(color_vector,A)
         print(color_check.tolist().count(0))
 
