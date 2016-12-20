@@ -30,21 +30,29 @@ def solve_it(input_data):
 
     checkMetrix = np.zeros((node_count,edge_count))
     for i in range(edge_count):
-        nodeList[edges[i][0]].conectedNodes.add(edges[i][1])
-        nodeList[edges[i][1]].conectedNodes.add(edges[i][0])
+        nodeList[edges[i][0]].conectedNodes.add(nodeList[edges[i][1]])
+        nodeList[edges[i][1]].conectedNodes.add(nodeList[edges[i][0]])
         checkMetrix[edges[i][0]][i] =  1
         checkMetrix[edges[i][1]][i] = -1
+
+    nodeList = sorted(nodeList, key=lambda colorNode:len(colorNode.conectedNodes), reverse=True)
 
     for node in nodeList:
         if not node.decided:
             unnavailableSet=set()
             for neighbour in node.conectedNodes:
-                if nodeList[neighbour].decided:
-                    unnavailableSet.add(nodeList[neighbour].color)
+                if neighbour.decided:
+                    unnavailableSet.add(neighbour.color)
             node.availableSet = node.availableSet.difference(unnavailableSet)
             node.color = min(node.availableSet)
             node.decided=True
 
+    # print( ' '.join(map(str, [node.index for node in nodeList])))
+    # print( ' '.join(map(str, [node.color for node in nodeList])))
+    # print( ' '.join(map(str, [len(node.conectedNodes) for node in nodeList])))
+
+
+    nodeList = sorted(nodeList, key=lambda colorNode:colorNode.index)
 
     solution = [node.color for node in nodeList]
     if 0 in (np.dot(np.array(solution),checkMetrix)):
