@@ -62,8 +62,6 @@ class graph(object):
                 node.tier = i
             previousTier = nextTier
             exploredSet.update(nextTier)
-
-
     def sortByNodeDegree(self):
         # print( 'INDEX  : ',''.join(format(node.id, "3.0f")                 for node in self.nodes))
         self.nodes = sorted(self.nodes, key=lambda colorNode:(colorNode.degree), reverse=True)
