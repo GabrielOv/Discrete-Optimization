@@ -1,11 +1,23 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+import random
 import math
-import numpy as np
-from collections import namedtuple
+import argparse
 import csv
+from ortools.constraint_solver import pywrapcp
+# You need to import routing_enums_pb2 after pywrapcp!
+from ortools.constraint_solver import routing_enums_pb2
 
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--tsp_size', default = 10, type = int, help='Size of Traveling Salesman Problem instance.')
+# parser.add_argument('--tsp_use_random_matrix', default=True, type=bool, help='Use random cost matrix.')
+# parser.add_argument('--tsp_random_forbidden_connections', default = 0, type = int, help='Number of random forbidden connections.')
+# parser.add_argument('--tsp_random_seed', default = 0, type = int, help = 'Random seed.')
+# parser.add_argument('--light_propagation', default = False, type = bool, help = 'Use light propagation')
+# parser.add_argument('--data_file', default = False, type = str, help = 'This test requires an input file')
+
+# Cost/distance functions.
 class point(object):
     def __init__(self,index,xCoord,yCoord):
         self.id = index
@@ -13,179 +25,125 @@ class point(object):
         self.y  = yCoord
     def pointAsArray(self):
         return (np.array([self.x, self.y]))
+    def distanceTo(self,otherPoint):
+        return math.sqrt((self.x - otherPoint.x)**2 + (self.y - otherPoint.y)**2)
 
-class cloud(object):
-    def __init__(self):
-        self.nodeCount = 0
-        self.points = []
-        # self.allPoints  = set()
-        self.usedPoints  = set()
-        self.unmappedPoints = set()
-        self.ordered   = []
-        self.maxX      = 0
-        self.minX      = 0
-        self.maxY      = 0
-        self.minY      = 0
-    def loadInputFromFile(self,input_data):
-        lines = input_data.split('\n')
-        self.nodeCount = int(lines[0])
+class RandomMatrix(object):
+    """Random matrix."""
+    def __init__(self,input_data):
+        """Initialize random matrix."""
+        self.points = loadInputFromFile(input_data)
+        self.matrix = {}
+        for from_node in range(len(self.points)):
+            self.matrix[from_node] = {}
+            for to_node in range(len(self.points)):
+                if from_node == to_node:
+                    self.matrix[from_node][to_node] = 0
+                else:
+                    self.matrix[from_node][to_node] = Distance(self.points[from_node],self.points[to_node])
+        # print(self.matrix)
 
-        line = lines[1]
-        parts = line.split()
-        self.points.append(point(1,float(parts[0]), float(parts[1])))
-        self.maxX=float(parts[0])
-        self.minX=float(parts[0])
-        self.maxY=float(parts[1])
-        self.minY=float(parts[1])
-        for i in range(2,len(lines)-1):
-            line = lines[i]
-            parts = line.split()
-            self.points.append(point(i,float(parts[0]), float(parts[1])))
-            if float(parts[0]) > self.maxX: self.maxX = float(parts[0])
-            if float(parts[0]) < self.minX: self.minX = float(parts[0])
-            if float(parts[1]) > self.maxY: self.maxY = float(parts[1])
-            if float(parts[1]) < self.minY: self.minY = float(parts[1])
+    def Distance(self, from_node, to_node):
+        return self.matrix[from_node][to_node]
 
-        self.usedPoints      = set()
-        self.unmappedPoints = set(self.points)
-    def loadInputFromList(self,pointList):
-        self.nodeCount = len(pointList)
-        self.points = pointList
-        self.maxX=self.points[0].x
-        self.minX=self.points[0].x
-        self.maxY=self.points[0].y
-        self.minY=self.points[0].y
-
-        for i in range(1, len(pointList)):
-            if pointList[i].x > self.maxX: self.maxX=pointList[i].x+1
-            if pointList[i].x < self.minX: self.minX=pointList[i].x-1
-            if pointList[i].y > self.maxY: self.maxY=pointList[i].y+1
-            if pointList[i].y < self.minY: self.minY=pointList[i].y-1
-
-        self.usedPoints      = set()
-        self.unmappedPoints = set(self.points)
-    def pointChosen(self,point):
-        self.ordered.append(point)
-        self.usedPoints.update([point])
-        self.unmappedPoints.discard(point)
-    def evaluateDistances(self,point):
-        distances = []
-        for p in self.unmappedPoints:
-            distances.append((length(p.pointAsArray(), point.pointAsArray()),p))
-
-        distances = sorted(distances, key=getKey)
-        return(distances[0][1])
-    def totalDistance(self):
-        totalDistance = 0
-        for i in range(len(self.points)-1):
-            totalDistance += length(self.ordered[i].pointAsArray(),self.ordered[i+1].pointAsArray())
-        totalDistance += length(self.ordered[-1].pointAsArray(),self.ordered[0].pointAsArray())
-        return totalDistance
-
-def getKey(item):
-    return item[0]
-def length(point1, point2):
-    return math.sqrt((point1[0] - point2[0])**2 + (point1[1] - point2[1])**2)
-def idForFarthest(cloud):
-    pointCloud = []
-    for point in cloud.points:
-        pointCloud.append(point.pointAsArray())
-    centerPoint = np.mean(pointCloud, axis = 0)
-    distancesToCenter=[]
-    for point in pointCloud:
-        distancesToCenter.append(length(point,centerPoint))
-    index_max = np.argmax(distancesToCenter)
-    return index_max
-def csvOutput(cloud):
+def Distance(i, j):
+  return i.distanceTo(j)
+def csvOutput(matrix, routeList):
     with open('ordered.csv', 'w', newline='') as csvfile:
         spamwriter = csv.writer(csvfile, delimiter=' ',quotechar=',', quoting=csv.QUOTE_MINIMAL)
-        for point in cloud.ordered:
+        for index in routeList[1:]:
+            point = matrix.points[int(index)]
             spamwriter.writerow([point.x,point.y])
-def greddyForProximity(dataSet):
-    startPoint = dataSet.points[idForFarthest(dataSet)]
-    dataSet.pointChosen(startPoint)
-    while dataSet.unmappedPoints:
-        dataSet.pointChosen(dataSet.evaluateDistances(dataSet.ordered[-1]))
-    solution = [p.id for p in dataSet.ordered]
-    obj = (dataSet.totalDistance())
-    return [solution, obj]
-def trivialSolution(dataSet):
-    solution = [p.id for p in dataSet.points]
-    dataSet.ordered = dataSet.points
-    obj = (dataSet.totalDistance())
-    return [solution, obj]
-def binarizer(dataSet,resolution):
 
-    xLength = dataSet.maxX-dataSet.minX
-    xSpan   = xLength/resolution
-    yLength = dataSet.maxY-dataSet.minY
-    ySpan   = yLength/resolution
-    limitsX = [(dataSet.minX+i*xSpan) for i in range(resolution+1)]
-    limitsY = [(dataSet.minY+i*ySpan) for i in range(resolution+1)]
-
-    bins = []
-    for i in range(resolution):
-        for j in range(resolution):
-            auxPointList = []
-            auxCloud = cloud()
-            mappedSet=set()
-            for point in dataSet.unmappedPoints:
-                if point.x >= limitsX[i] and point.x <= limitsX[i+1]:
-                    if point.y >= limitsY[j] and point.y <= limitsY[j+1]:
-                        auxPointList.append(point)
-            if auxPointList:
-                auxCloud.loadInputFromList(auxPointList)
-            bins.append(auxCloud)
-
-    startPoint   = bins[0].points[idForFarthest(bins[0])]
-    solutionList = []
-
-    orderList = []
-    for i in range(resolution**2):
-        if (math.floor(i/resolution) % 2 == 0):
-            orderList.append(i)
-        else:
-            orderList.append(math.floor(i/resolution)*resolution-1+resolution-i%resolution)
-
-    print(orderList)
-    for i in orderList:#range(0,len(bins)):
-        bins[i].pointChosen(startPoint)
-        while bins[i].unmappedPoints:
-            bins[i].pointChosen(bins[i].evaluateDistances(bins[i].ordered[-1]))
-        startPoint = bins[i].ordered[-1]
-
-    finalOrder = [bins[0].ordered[0]]
-    # for group in bins:
-    for i in orderList:
-        finalOrder += bins[i].ordered[1:]
-
-    # print(len(finalOrder))
-    dataSet.ordered = finalOrder
-
-    solution = [p.id for p in dataSet.ordered]
-
-    obj = (dataSet.totalDistance())
-    return [solution, obj]
+def loadInputFromFile(input_data):
+    lines = input_data.split('\n')
+    nodeCount = int(lines[0])
+    points = []
+    line = lines[1]
+    parts = line.split()
+    if nodeCount < 20000:
+        for i in range(1,nodeCount+1):
+            line = lines[i]
+            parts = line.split()
+            points.append(point(i,float(parts[0]), float(parts[1])))
+        return points
+    else:
+        for i in range(1,nodeCount+1):
+            line = lines[i]
+            parts = line.split()
+            points.append(point(i,float(parts[0]), float(parts[1])))
+        return points
 
 
 def solve_it(input_data):
+  # Create routing model
+  # if args.tsp_size > 0:
+    # TSP of size args.tsp_size
+    # Second argument = 1 to build a single tour (it's a TSP).
+    # Nodes are indexed from 0 to parser_tsp_size - 1, by default the start of
+    # the route is node 0.
+    matrix = RandomMatrix(input_data)
+    tsp_size=len(matrix.points)
+    routing = pywrapcp.RoutingModel(tsp_size, 1, 0)
 
-    dataSet = cloud()
-    dataSet.loadInputFromFile(input_data)
+    search_parameters = pywrapcp.RoutingModel.DefaultSearchParameters()
+    # Setting first solution heuristic (cheapest addition).
+    search_parameters.first_solution_strategy = (routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
 
-    # [solution, obj] = greddyForProximity(dataSet)
-    # [solution, obj] = trivialSolution(dataSet)
-    [solution, obj] = binarizer(dataSet,10)
-    # prepare the solution in the specified output format
-    output_data = '%.2f' % obj + ' ' + str(0) + '\n'
-    output_data += ' '.join(map(str, solution))
-    csvOutput(dataSet)
-    return output_data
+    # Setting the cost function.
+    # Put a callback to the distance accessor here. The callback takes two
+    # arguments (the from and to node inidices) and returns the distance between
+    # these nodes.
 
+    matrix_callback = matrix.Distance
+    tsp_use_random_matrix = True
+    if tsp_use_random_matrix:
+      routing.SetArcCostEvaluatorOfAllVehicles(matrix_callback)
+    else:
+      routing.SetArcCostEvaluatorOfAllVehicles(Distance)
+    # Forbid node connections (randomly).
+    rand = random.Random()
+    rand.seed(1)# rand.seed(args.tsp_random_seed)
+    forbidden_connections = 0
+    while forbidden_connections < 0:# while forbidden_connections < args.tsp_random_forbidden_connections:
+        from_node = rand.randrange(tsp_size - 1)
+        to_node = rand.randrange(tsp_size - 1) + 1
+        if routing.NextVar(from_node).Contains(to_node):
+            print('Forbidding connection ' + str(from_node) + ' -> ' + str(to_node))
+            routing.NextVar(from_node).RemoveValue(to_node)
+            forbidden_connections += 1
 
-import sys
+    # Solve, returns a solution if any.
+#    assignment = routing.SolveWithParameters(search_parameters)
+    assignment = routing.Solve()
+    if assignment:
+        # Solution cost.
+        # print(assignment.ObjectiveValue())
+        # Inspect solution.
+        # Only one route here; otherwise iterate from 0 to routing.vehicles() - 1
+        route_number = 0
+        node = routing.Start(route_number)
+        route = ''
+        while not routing.IsEnd(node):
+            route += ' '+ str(node)
+            node = assignment.Value(routing.NextVar(node))
+        # route += '0'
+        nodeList = route.split()[1:]
+        # totalDistance = assignment.ObjectiveValue() + matrix.points[int(nodeList[0])].distanceTo(matrix.points[int(nodeList[-1])])
+        # print(totalDistance)
+        output_data = '%.2f' % assignment.ObjectiveValue() + ' ' + str(0) + '\n'
+        output_data += route
+        # output_data += ' '.join(map(str, solution))
+        csvOutput(matrix,route.split(' '))
+        return output_data
+
+    else:
+        print('No solution found.')
+  # else:
+  #   print('Specify an instance greater than 0.')
 
 if __name__ == '__main__':
+
     import sys
     if len(sys.argv) > 1:
         file_location = sys.argv[1].strip()
@@ -194,3 +152,13 @@ if __name__ == '__main__':
         print(solve_it(input_data))
     else:
         print('This test requires an input file.  Please select one from the data directory. (i.e. python solver.py ./data/tsp_51_1)')
+
+# if __name__ == '__main__':
+#     import sys
+#     if len(sys.argv) > 1:
+#         file_location = sys.argv[1].strip()
+#         with open(file_location, 'r') as input_data_file:
+#             input_data = input_data_file.read()
+#         print(solve_it(input_data))
+#     else:
+#         print('This test requires an input file.  Please select one from the data directory. (i.e. python solver.py ./data/tsp_51_1)')
